@@ -132,15 +132,25 @@ def is_hdr_source(video: Path) -> bool:
 
 
 def is_portrait_source(video: Path) -> bool:
-    """Return True if the video's height > width (portrait / vertical)."""
+    """Return True if the displayed image is portrait / vertical."""
     try:
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height",
-             "-of", "csv=p=0", str(video)],
+             "-show_entries", "stream=width,height:stream_side_data=rotation",
+             "-of", "json", str(video)],
             capture_output=True, text=True, check=True,
         )
-        w, h = map(int, out.stdout.strip().split(","))
+        data = json.loads(out.stdout)
+        stream = data.get("streams", [{}])[0]
+        w = int(stream.get("width", 0))
+        h = int(stream.get("height", 0))
+        rotation = 0.0
+        for side_data in stream.get("side_data_list", []) or []:
+            if "rotation" in side_data:
+                rotation = float(side_data["rotation"])
+                break
+        if abs(rotation) % 180 == 90:
+            w, h = h, w
         return h > w
     except Exception:
         return False
